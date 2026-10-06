@@ -1,0 +1,33 @@
+{
+  "name": "flexfit-backend",
+  "version": "1.0.0",
+  "description": "FlexFit - Fitness Class Booking Platform Backend API",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "seed": "node src/scripts/seed.js",
+    "seed:bookings": "node src/scripts/seedDemoBookings.js"
+  },
+  "keywords": [
+    "express",
+    "nodejs",
+    "flexfit",
+    "fitness",
+    "mongodb",
+    "mvc"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "dotenv": "^17.0.0",
+    "express": "^5.1.0",
+    "express-validator": "^7.3.0",
+    "firebase-admin": "^14.5.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.20.0",
+    "multer": "^2.0.2"
+  }
+}

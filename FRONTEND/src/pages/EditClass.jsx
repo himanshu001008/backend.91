@@ -1,0 +1,463 @@
+import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import API from '../services/api';
+import Input from '../components/Input';
+import Button from '../components/Button';
+import Loading from '../components/Loading';
+import ErrorMessage from '../components/ErrorMessage';
+import {
+  Edit,
+  ArrowLeft,
+  Dumbbell,
+  Calendar,
+  Clock,
+  User,
+  Users,
+  Image as ImageIcon,
+  Upload,
+  X,
+  CheckCircle2,
+  AlertCircle,
+  Save
+} from 'lucide-react';
+
+const categories = ['Yoga', 'Gym', 'Zumba', 'Cardio', 'Strength', 'Pilates'];
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp', 'image/gif'];
+
+const EditClass = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    instructor: '',
+    category: 'Yoga',
+    date: '',
+    startTime: '',
+    endTime: '',
+    capacity: 20,
+    imageUrl: ''
+  });
+
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+
+  const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errors, setErrors] = useState({});
+  const [serverError, setServerError] = useState('');
+
+  // Fetch initial class details
+  useEffect(() => {
+    const fetchClass = async () => {
+      setLoading(true);
+      setServerError('');
+
+      try {
+        const response = await API.get(`/classes/${id}`);
+        const data = response.data?.data || response.data;
+
+        if (data) {
+          const formattedDate = data.date
+            ? new Date(data.date).toISOString().split('T')[0]
+            : '';
+
+          setFormData({
+            title: data.title || '',
+            description: data.description || '',
+            instructor: data.instructor || '',
+            category: data.category || 'Yoga',
+            date: formattedDate,
+            startTime: data.startTime || '',
+            endTime: data.endTime || '',
+            capacity: data.capacity || 20,
+            imageUrl: data.imageUrl || ''
+          });
+
+          if (data.imageUrl) {
+            setImagePreview(data.imageUrl);
+          }
+        }
+      } catch (err) {
+        console.error('Error loading class for editing:', err);
+        setServerError(err.message || 'Failed to load class information for editing');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (id) {
+      fetchClass();
+    }
+  }, [id]);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+    if (errors[name]) {
+      setErrors((prev) => ({ ...prev, [name]: '' }));
+    }
+    if (serverError) setServerError('');
+  };
+
+  /**
+   * Handle File Selection & Validation
+   */
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // 1. Validate File Type
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      setErrors((prev) => ({
+        ...prev,
+        image: 'Invalid file type. Only JPG, JPEG, PNG, WEBP, and GIF images are allowed.'
+      }));
+      return;
+    }
+
+    // 2. Validate File Size (5MB Limit)
+    if (file.size > MAX_FILE_SIZE) {
+      setErrors((prev) => ({
+        ...prev,
+        image: 'File size exceeds maximum limit of 5MB.'
+      }));
+      return;
+    }
+
+    setErrors((prev) => ({ ...prev, image: '' }));
+    setSelectedFile(file);
+    setImagePreview(URL.createObjectURL(file));
+  };
+
+  const handleRemoveFile = () => {
+    setSelectedFile(null);
+    setImagePreview(null);
+    setFormData((prev) => ({ ...prev, imageUrl: '' }));
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+
+    if (!formData.title.trim()) {
+      newErrors.title = 'Class title is required';
+    }
+
+    if (!formData.instructor.trim()) {
+      newErrors.instructor = 'Instructor name is required';
+    }
+
+    if (!formData.category) {
+      newErrors.category = 'Class category is required';
+    }
+
+    if (!formData.date) {
+      newErrors.date = 'Class date is required';
+    }
+
+    if (!formData.startTime.trim()) {
+      newErrors.startTime = 'Start time is required';
+    }
+
+    if (!formData.endTime.trim()) {
+      newErrors.endTime = 'End time is required';
+    }
+
+    if (Number(formData.capacity) < 1) {
+      newErrors.capacity = 'Capacity must be at least 1';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setServerError('');
+
+    if (!validateForm()) return;
+
+    setIsSubmitting(true);
+    try {
+      if (selectedFile) {
+        const bodyFormData = new FormData();
+        bodyFormData.append('title', formData.title.trim());
+        bodyFormData.append('description', formData.description.trim());
+        bodyFormData.append('instructor', formData.instructor.trim());
+        bodyFormData.append('category', formData.category);
+        bodyFormData.append('date', formData.date);
+        bodyFormData.append('startTime', formData.startTime.trim());
+        bodyFormData.append('endTime', formData.endTime.trim());
+        bodyFormData.append('capacity', Number(formData.capacity));
+        bodyFormData.append('image', selectedFile);
+
+        await API.put(`/classes/${id}`, bodyFormData, {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        });
+      } else {
+        const payload = {
+          title: formData.title.trim(),
+          description: formData.description.trim(),
+          instructor: formData.instructor.trim(),
+          category: formData.category,
+          date: formData.date,
+          startTime: formData.startTime.trim(),
+          endTime: formData.endTime.trim(),
+          capacity: Number(formData.capacity),
+          imageUrl: formData.imageUrl.trim()
+        };
+
+        await API.put(`/classes/${id}`, payload);
+      }
+
+      navigate('/studio/dashboard', { replace: true });
+    } catch (err) {
+      console.error('Error updating class:', err);
+      setServerError(err.message || 'Failed to update fitness class. Please verify inputs.');
+      setIsSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return <Loading fullScreen text="Loading class details for editing..." />;
+  }
+
+  return (
+    <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
+      {/* Back Link */}
+      <button
+        onClick={() => navigate('/studio/dashboard')}
+        className="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-cyan-400 transition-colors"
+      >
+        <ArrowLeft className="w-4 h-4" /> Back to Studio Dashboard
+      </button>
+
+      {/* Header */}
+      <div className="space-y-2">
+        <span className="px-3.5 py-1 rounded-full bg-cyan-500/10 text-cyan-400 text-xs font-bold uppercase tracking-wider border border-cyan-500/20 inline-flex items-center gap-1.5">
+          <Edit className="w-3.5 h-3.5" /> Studio Management
+        </span>
+        <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+          Edit Fitness Class
+        </h1>
+        <p className="text-slate-400 text-xs sm:text-sm">
+          Update session details or upload a new cover image.
+        </p>
+      </div>
+
+      {/* Form Container */}
+      <div className="p-8 rounded-3xl bg-slate-900/60 border border-slate-800 shadow-2xl backdrop-blur-xl space-y-6">
+        {serverError && (
+          <ErrorMessage
+            title="Update Failed"
+            message={serverError}
+            onRetry={() => setServerError('')}
+          />
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-6" noValidate>
+          {/* Title */}
+          <Input
+            label="Class Title"
+            name="title"
+            placeholder="e.g. Power Vinyasa Yoga & Mindfulness"
+            icon={Dumbbell}
+            value={formData.title}
+            onChange={handleChange}
+            error={errors.title}
+            required
+          />
+
+          {/* Description */}
+          <div className="space-y-1.5">
+            <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+              Description
+            </label>
+            <textarea
+              name="description"
+              rows={3}
+              placeholder="Describe the session goals, intensity level, and equipment needed..."
+              value={formData.description}
+              onChange={handleChange}
+              className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+            />
+          </div>
+
+          {/* Instructor & Category Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <Input
+              label="Instructor Name"
+              name="instructor"
+              placeholder="e.g. Elena Rostova"
+              icon={User}
+              value={formData.instructor}
+              onChange={handleChange}
+              error={errors.instructor}
+              required
+            />
+
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                Category <span className="text-rose-400">*</span>
+              </label>
+              <select
+                name="category"
+                value={formData.category}
+                onChange={handleChange}
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-cyan-500"
+              >
+                {categories.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Date, StartTime, EndTime Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+            <Input
+              label="Date"
+              name="date"
+              type="date"
+              icon={Calendar}
+              value={formData.date}
+              onChange={handleChange}
+              error={errors.date}
+              required
+            />
+
+            <Input
+              label="Start Time"
+              name="startTime"
+              placeholder="09:00 AM"
+              icon={Clock}
+              value={formData.startTime}
+              onChange={handleChange}
+              error={errors.startTime}
+              required
+            />
+
+            <Input
+              label="End Time"
+              name="endTime"
+              placeholder="10:00 AM"
+              icon={Clock}
+              value={formData.endTime}
+              onChange={handleChange}
+              error={errors.endTime}
+              required
+            />
+          </div>
+
+          {/* Capacity */}
+          <Input
+            label="Max Capacity"
+            name="capacity"
+            type="number"
+            min="1"
+            icon={Users}
+            value={formData.capacity}
+            onChange={handleChange}
+            error={errors.capacity}
+            required
+          />
+
+          {/* Image Selection & Preview Component */}
+          <div className="space-y-2 pt-2 border-t border-slate-800">
+            <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+              Class Cover Image (File Upload or Image URL)
+            </label>
+
+            {imagePreview ? (
+              <div className="relative rounded-2xl overflow-hidden border border-slate-800 bg-slate-950 p-2 flex items-center gap-4">
+                <img
+                  src={imagePreview}
+                  alt="Preview"
+                  className="w-24 h-24 object-cover rounded-xl shrink-0"
+                />
+                <div className="flex-1 space-y-1 overflow-hidden">
+                  <div className="text-xs font-bold text-white truncate">
+                    {selectedFile ? selectedFile.name : 'Current Cover Photo'}
+                  </div>
+                  <div className="text-[11px] text-slate-400">
+                    {selectedFile ? `${(selectedFile.size / 1024).toFixed(1)} KB` : 'Active URL'}
+                  </div>
+                  <div className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Image Attached
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleRemoveFile}
+                  className="p-2 rounded-xl bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-colors mr-2"
+                  title="Remove Image"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <label className="border-2 border-dashed border-slate-800 hover:border-cyan-500/50 rounded-2xl p-4 text-center cursor-pointer bg-slate-950/40 hover:bg-slate-900/60 transition-all flex flex-col items-center justify-center space-y-2">
+                  <Upload className="w-6 h-6 text-cyan-400" />
+                  <span className="text-xs font-bold text-slate-200">Upload New Image File</span>
+                  <span className="text-[10px] text-slate-500">JPG, PNG, WEBP, GIF (Max 5MB)</span>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/jpg,image/webp,image/gif"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                </label>
+
+                <Input
+                  label="Or External Image URL"
+                  name="imageUrl"
+                  type="url"
+                  placeholder="https://images.unsplash.com/..."
+                  icon={ImageIcon}
+                  value={formData.imageUrl}
+                  onChange={handleChange}
+                />
+              </div>
+            )}
+
+            {errors.image && (
+              <p className="text-xs text-rose-400 font-medium flex items-center gap-1 mt-1">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {errors.image}
+              </p>
+            )}
+          </div>
+
+          {/* Action Footer */}
+          <div className="pt-4 flex justify-end gap-3">
+            <Button
+              variant="outline"
+              type="button"
+              onClick={() => navigate('/studio/dashboard')}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+
+            <Button
+              variant="primary"
+              type="submit"
+              isLoading={isSubmitting}
+              icon={Save}
+            >
+              Save Changes
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+export default EditClass;
